@@ -5,51 +5,37 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '8.x'
-
       - name: Restore dependencies
         run: dotnet restore
-
       - name: Build solution
         run: dotnet build --configuration Release --no-restore
-
       - name: Run tests
         run: dotnet test --no-build --configuration Release --verbosity normal
-
       - name: Pack NuGet Package
         run: dotnet pack CriticalCrate.ReliableUdp/CriticalCrate.ReliableUdp.csproj --configuration Release --no-build -o ./artifacts
-        
       - name: Create Package Structure
         run: |
           mkdir -p package/Packages/com.CriticalCrate.ReliableUdp/{Runtime,Editor,Tests}
           cp -r ./CriticalCrate.ReliableUdp/bin/Release/net8.0/*.dll package/Packages/com.CriticalCrate.ReliableUdp/Runtime/
           cp CriticalCrate.ReliableUdp/package.json package/Packages/com.CriticalCrate.ReliableUdp/package.json
           cp CriticalCrate.ReliableUdp/CriticalCrate.ReliableUdp.Runtime.asmdef package/Packages/com.CriticalCrate.ReliableUdp/Runtime/
-          
       - name: Create Tarball
         run: |
           cd package
           tar -czf ../CriticalCrate.ReliableUdp.tgz *
           cd ..
-          
       - name: Upload Release Artifact
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./CriticalCrate.ReliableUdp.tgz
-          asset_name: CriticalCrate.ReliableUdp.tgz
-          asset_content_type: application/gzip
-          
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" "CriticalCrate.ReliableUdp.tgz" --clobber
       - name: Publish to NuGet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
