@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CriticalCrate.ReliableUdp",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CriticalCrate.ReliableUdp.Tests", "CriticalCrate.ReliableUdp.Tests\CriticalCrate.ReliableUdp.Tests.csproj", "{B6A97436-B787-4CD6-BB6D-4B99146E0CCF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CriticalCrate.ReliableUdp.Example", "CriticalCrate.ReliableUdp.Example\CriticalCrate.ReliableUdp.Example.csproj", "{C178F2B5-60C4-4B98-A28E-CD66B95315DC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{B6A97436-B787-4CD6-BB6D-4B99146E0CCF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B6A97436-B787-4CD6-BB6D-4B99146E0CCF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B6A97436-B787-4CD6-BB6D-4B99146E0CCF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C178F2B5-60C4-4B98-A28E-CD66B95315DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C178F2B5-60C4-4B98-A28E-CD66B95315DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C178F2B5-60C4-4B98-A28E-CD66B95315DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C178F2B5-60C4-4B98-A28E-CD66B95315DC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

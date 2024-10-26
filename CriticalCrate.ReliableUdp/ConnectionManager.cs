@@ -103,9 +103,12 @@ internal sealed class ServerConnectionManager(
     public void CheckConnectionTimeout(DateTime now)
     {
         _endPointsToDisconnect.Clear();
-        foreach (var keyValue in _lastReceivedPacket.Where(keyValue => keyValue.Value.Add(connectionTimeout) < now))
+        foreach (var keyValue in _lastReceivedPacket)
         {
-            _endPointsToDisconnect.Add(keyValue.Key);
+            if (keyValue.Value.Add(connectionTimeout) < now)
+            {
+                _endPointsToDisconnect.Add(keyValue.Key);
+            }
         }
 
         foreach (var endpoint in _endPointsToDisconnect)

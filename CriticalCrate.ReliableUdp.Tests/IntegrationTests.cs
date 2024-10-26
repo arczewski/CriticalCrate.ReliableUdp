@@ -17,7 +17,7 @@ public class IntegrationTests
 
         // Act
         server.Listen(new IPEndPoint(IPAddress.Any, 4444));
-        client.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4444));
+        client.Connect(new IPEndPoint(IPAddress.Loopback, 4444));
         while (server.ConnectionManager.ConnectedClients.Count != 1 || !client.ConnectionManager.Connected)
         {
             server.Pool();
@@ -33,7 +33,7 @@ public class IntegrationTests
     public void Packet_Creation_Should_Not_Allocate_Memory()
     {
         // Arrange
-        var endpoint = IPEndPoint.Parse("127.0.0.1");
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 5000);
         var packetFactory = new PacketManager();
         var message = "Hello World"u8.ToArray();
 
@@ -58,7 +58,7 @@ public class IntegrationTests
         using var server = SocketFactory.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
         var packetFactory = new PacketManager();
         server.Listen(new IPEndPoint(IPAddress.Any, 4444));
-        client.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4444));
+        client.Connect(new IPEndPoint(IPAddress.Loopback, 4444));
         while (server.ConnectionManager.ConnectedClients.Count != 1 || !client.ConnectionManager.Connected)
         {
             server.Pool();
@@ -117,7 +117,7 @@ public class IntegrationTests
         using var server = SocketFactory.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
         var packetFactory = new PacketManager();
         server.Listen(new IPEndPoint(IPAddress.Any, 6666));
-        client.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6666));
+        client.Connect(new IPEndPoint(IPAddress.Loopback, 6666));
         while (server.ConnectionManager.ConnectedClients.Count != 1 || !client.ConnectionManager.Connected)
         {
             server.Pool();
@@ -173,7 +173,7 @@ public class IntegrationTests
         using var server = SocketFactory.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
         var packetFactory = new PacketManager();
         server.Listen(new IPEndPoint(IPAddress.Any, 5555));
-        client.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5555));
+        client.Connect(new IPEndPoint(IPAddress.Loopback, 5555));
         while (server.ConnectionManager.ConnectedClients.Count != 1 || !client.ConnectionManager.Connected)
         {
             server.Pool();
