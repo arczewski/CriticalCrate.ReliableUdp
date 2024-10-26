@@ -2,6 +2,8 @@ name: Publish NuGet Package
 on:
   release:
     types: [created]
+permissions:
+  contents: write 
 jobs:
   publish:
     runs-on: ubuntu-latest
