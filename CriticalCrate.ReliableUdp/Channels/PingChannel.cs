@@ -43,12 +43,9 @@ internal sealed class PingChannel(ISocket socket, IPacketFactory packetFactory, 
         if (packetType.HasFlag(PacketType.PingAck) &&
             _lastPing.TryGetValue(receivedPacket.EndPoint, out var pingData))
         {
-            if (pingData.PingId == packetId)
-            {
-                _trackedPings[receivedPacket.EndPoint].Add((DateTime.UtcNow - pingData.LastSendTime).TotalMilliseconds);
-                OnPingUpdated?.Invoke(receivedPacket.EndPoint, (long)CalculatePing(_trackedPings[receivedPacket.EndPoint]));
-            }
-
+            if (pingData.PingId != packetId) return;
+            _trackedPings[receivedPacket.EndPoint].Add((DateTime.UtcNow - pingData.LastSendTime).TotalMilliseconds);
+            OnPingUpdated?.Invoke(receivedPacket.EndPoint, (long)CalculatePing(_trackedPings[receivedPacket.EndPoint]));
             return;
         }
 
@@ -94,10 +91,7 @@ internal sealed class PingChannel(ISocket socket, IPacketFactory packetFactory, 
 
     private static double CalculatePing(RingBuffer<double> pingBuffer)
     {
-        double accumulatedPing = 0;
-        foreach (var ping in pingBuffer)
-            accumulatedPing += ping;
-        return accumulatedPing / pingBuffer.Capacity;
+        return pingBuffer.Sum() / pingBuffer.Capacity;
     }
 }
 

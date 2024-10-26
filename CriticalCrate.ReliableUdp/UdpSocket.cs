@@ -1,31 +1,38 @@
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
 namespace CriticalCrate.ReliableUdp;
 
-public sealed class UdpSocket(IPacketFactory packetFactory) : ISocket
+internal sealed class UdpSocket(IPacketManager packetManager, int sendBufferSize = 1024 * 1024 * 4, int receiveBufferSize = 1024 * 1024 * 4) : ISocket
 {
     public event OnPacketReceived? OnPacketReceived;
-
     private readonly Socket _listenSocket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-    private Packet _receivePacket = packetFactory.CreatePacket(new IPEndPoint(0, 0), ISocket.Mtu);
-
+    private readonly Dictionary<EndPoint, SocketAddress> _socketAddresses = new();
+    private Packet _receivePacket = packetManager.CreatePacket(new IPEndPoint(0, 0), ISocket.Mtu);
+    
     public void Listen(EndPoint endPoint)
     {
-        _receivePacket.SetSocketAddress(_receivePacket.EndPoint.Serialize());
         _listenSocket.Bind(endPoint);
         _listenSocket.Blocking = false;
-        _listenSocket.ReceiveBufferSize = 1024 * 1024 * 32;
-        _listenSocket.SendBufferSize = 1024 * 1024 * 32;
+        _listenSocket.ReceiveBufferSize = receiveBufferSize;
+        _listenSocket.SendBufferSize = sendBufferSize;
     }
 
-    public void Send(Packet packet)
+    public void Send(in Packet packet)
     {
-        Debug.Assert(packet.SocketAddress != null);
         if (!_listenSocket.Poll(0, SelectMode.SelectWrite))
+        {
+            packetManager.ReturnPacket(packet);
             return;
-        _listenSocket.SendTo(packet.Buffer, SocketFlags.None, socketAddress: packet.SocketAddress);
+        }
+
+        if (!_socketAddresses.TryGetValue(packet.EndPoint, out var socketAddress))
+        {
+            socketAddress = packet.EndPoint.Serialize();
+            _socketAddresses.Add(packet.EndPoint, socketAddress);
+        }
+        _listenSocket.SendTo(packet.Buffer, SocketFlags.None, socketAddress: socketAddress);
+        packetManager.ReturnPacket(packet);
     }
 
     public bool Pool()

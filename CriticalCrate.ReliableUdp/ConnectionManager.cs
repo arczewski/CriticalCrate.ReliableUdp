@@ -41,8 +41,8 @@ internal sealed class ClientConnectionManager(
     {
         _serverEndpoint = endPoint;
         var connectionPacket = packetFactory.CreatePacket(_serverEndpoint, UnreliableChannel.HeaderSize);
-        connectionPacket.Buffer[0] = (byte)PacketType.Connect;
-        connectionPacket.SetSocketAddress(endPoint.Serialize());
+        connectionPacket.Buffer[Constants.FlagPosition] = (byte)PacketType.Connect;
+        connectionPacket.Buffer[Constants.VersionPosition] = Constants.Version;
         socket.Send(connectionPacket);
     }
 
@@ -50,8 +50,8 @@ internal sealed class ClientConnectionManager(
     {
         if (!Connected || _serverEndpoint == null) return;
         var disconnectPacket = packetFactory.CreatePacket(_serverEndpoint, UnreliableChannel.HeaderSize);
-        disconnectPacket.Buffer[0] = (byte)PacketType.Disconnect;
-        disconnectPacket.SetSocketAddress(_serverEndpoint.Serialize());
+        disconnectPacket.Buffer[Constants.FlagPosition] = (byte)PacketType.Disconnect;
+        disconnectPacket.Buffer[Constants.VersionPosition] = Constants.Version;
         socket.Send(disconnectPacket);
         Connected = false;
         OnDisconnected?.Invoke();
@@ -84,7 +84,6 @@ public interface IServerConnectionManager : IConnectionManager
     event Action<EndPoint> OnDisconnected;
     bool IsConnected(EndPoint endPoint);
     IReadOnlyCollection<EndPoint> ConnectedClients { get; }
-    SocketAddress GetSocketAddress(EndPoint packetEndPoint);
 }
 
 internal sealed class ServerConnectionManager(
@@ -100,15 +99,13 @@ internal sealed class ServerConnectionManager(
 
     private readonly Dictionary<EndPoint, DateTime> _lastReceivedPacket = [];
     private readonly List<EndPoint> _endPointsToDisconnect = [];
-    private readonly Dictionary<EndPoint, SocketAddress> _cachedSocketAddresses = [];
 
     public void CheckConnectionTimeout(DateTime now)
     {
         _endPointsToDisconnect.Clear();
-        foreach (var keyValue in _lastReceivedPacket)
+        foreach (var keyValue in _lastReceivedPacket.Where(keyValue => keyValue.Value.Add(connectionTimeout) < now))
         {
-            if (keyValue.Value.Add(connectionTimeout) < now)
-                _endPointsToDisconnect.Add(keyValue.Key);
+            _endPointsToDisconnect.Add(keyValue.Key);
         }
 
         foreach (var endpoint in _endPointsToDisconnect)
@@ -129,14 +126,13 @@ internal sealed class ServerConnectionManager(
                 SendServerFull(packet.EndPoint);
             }
 
-            if (_lastReceivedPacket.TryGetValue(packet.EndPoint, out var lastPacketTime))
+            if (_lastReceivedPacket.ContainsKey(packet.EndPoint))
             {
                 SendConnectionApproval(packet.EndPoint);
                 return;
             }
 
             _lastReceivedPacket.Add(packet.EndPoint, DateTime.Now);
-            _cachedSocketAddresses.Add(packet.EndPoint, packet.EndPoint.Serialize());
             SendConnectionApproval(packet.EndPoint);
             OnConnected?.Invoke(packet.EndPoint);
             return;
@@ -144,9 +140,8 @@ internal sealed class ServerConnectionManager(
 
         if (packetType.HasFlag(PacketType.Disconnect))
         {
-            if (!_lastReceivedPacket.Remove(packet.EndPoint, out var lastPacketTime))
+            if (!_lastReceivedPacket.Remove(packet.EndPoint))
                 return;
-            _cachedSocketAddresses.Remove(packet.EndPoint);
             OnDisconnected?.Invoke(packet.EndPoint);
             return;
         }
@@ -157,39 +152,25 @@ internal sealed class ServerConnectionManager(
     private void SendServerFull(EndPoint endPoint)
     {
         var packet = packetFactory.CreatePacket(endPoint, UnreliableChannel.HeaderSize);
-        packet.SetSocketAddress(endPoint.Serialize());
-        packet.Buffer[0] = (byte)PacketType.ServerFull;
-        packet.Buffer[1] = 1; //version
-        packet.Buffer[2] = 0; //packetId doesn't matter
-        packet.Buffer[3] = 0;
+        packet.Buffer[Constants.FlagPosition] = (byte)PacketType.ServerFull;
+        packet.Buffer[Constants.VersionPosition] = Constants.Version;
         socket.Send(packet);
     }
 
     private void SendConnectionApproval(EndPoint endPoint)
     {
         var packet = packetFactory.CreatePacket(endPoint, UnreliableChannel.HeaderSize);
-        packet.SetSocketAddress(endPoint.Serialize());
-        packet.Buffer[0] = (byte)PacketType.Connect;
-        packet.Buffer[1] = 1; //version
-        packet.Buffer[2] = 0; //packetId doesn't matter
-        packet.Buffer[3] = 0;
+        packet.Buffer[Constants.FlagPosition] = (byte)PacketType.Connect;
+        packet.Buffer[Constants.VersionPosition] = Constants.Version;
         socket.Send(packet);
     }
 
     private void SendDisconnect(EndPoint endPoint)
     {
         var packet = packetFactory.CreatePacket(endPoint, UnreliableChannel.HeaderSize);
-        packet.SetSocketAddress(endPoint.Serialize());
-        packet.Buffer[0] = (byte)PacketType.Disconnect;
-        packet.Buffer[1] = 1; //version
-        packet.Buffer[2] = 0; //packetId doesn't matter
-        packet.Buffer[3] = 0;
+        packet.Buffer[Constants.FlagPosition] = (byte)PacketType.Disconnect;
+        packet.Buffer[Constants.VersionPosition] = Constants.Version;
         socket.Send(packet);
         _lastReceivedPacket.Remove(endPoint);
-    }
-    
-    public SocketAddress GetSocketAddress(EndPoint packetEndPoint)
-    {
-        return _cachedSocketAddresses[packetEndPoint];
     }
 }

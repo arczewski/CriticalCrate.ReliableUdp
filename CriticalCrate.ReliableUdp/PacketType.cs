@@ -12,5 +12,5 @@ public enum PacketType
     
     PingAck = Ping | Ack,
     ReliableAck = Reliable | Ack,
-    ServerFull = Connect | Disconnect,
+    ServerFull = Connect | Disconnect
 }

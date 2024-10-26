@@ -12,8 +12,8 @@ public class IntegrationTests
     public void Can_Connect()
     {
         // Arrange
-        using var client = CriticalSocketExtensions.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
-        using var server = CriticalSocketExtensions.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
+        using var client = SocketFactory.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        using var server = SocketFactory.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
 
         // Act
         server.Listen(new IPEndPoint(IPAddress.Any, 4444));
@@ -34,7 +34,7 @@ public class IntegrationTests
     {
         // Arrange
         var endpoint = IPEndPoint.Parse("127.0.0.1");
-        var packetFactory = new PacketFactory();
+        var packetFactory = new PacketManager();
         var message = "Hello World"u8.ToArray();
 
         // Act
@@ -42,7 +42,7 @@ public class IntegrationTests
         var packet = packetFactory.CreatePacket(endpoint, message, 0, message.Length);
         var packet2 = packetFactory.CreatePacket(endpoint, 10);
         var packet3 = packetFactory.CreatePacket(in packet);
-        
+
         // Assert
         memoryBefore.Should().Be(memoryBefore);
         packet.Should().NotBeEquivalentTo(packet2);
@@ -54,9 +54,9 @@ public class IntegrationTests
     public void Can_Send_And_Receive_Unreliable()
     {
         // Arrange
-        using var client = CriticalSocketExtensions.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
-        using var server = CriticalSocketExtensions.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
-        var packetFactory = new PacketFactory();
+        using var client = SocketFactory.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        using var server = SocketFactory.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
+        var packetFactory = new PacketManager();
         server.Listen(new IPEndPoint(IPAddress.Any, 4444));
         client.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4444));
         while (server.ConnectionManager.ConnectedClients.Count != 1 || !client.ConnectionManager.Connected)
@@ -67,18 +67,18 @@ public class IntegrationTests
 
         var messageFromClient = "Hello World from client"u8.ToArray();
         var messageFromServer = "Hello World from server"u8.ToArray();
-        var messagesToSend = 1000000;
+        var messagesToSend = 100000;
 
         var receivedOnClient = 0;
         var receivedOnServer = 0;
         client.OnPacketReceived += packet =>
         {
-            //packet.Buffer.ToArray().Should().BeEquivalentTo(messageFromServer);
+            packet.Buffer.ToArray().Should().BeEquivalentTo(messageFromServer);
             receivedOnClient++;
         };
         server.OnPacketReceived += packet =>
         {
-            //packet.Buffer.ToArray().Should().BeEquivalentTo(messageFromClient);
+            packet.Buffer.ToArray().Should().BeEquivalentTo(messageFromClient);
             receivedOnServer++;
         };
 
@@ -113,9 +113,9 @@ public class IntegrationTests
     public void Can_Send_And_Receive_Reliable_Messages()
     {
         // Arrange
-        using var client = CriticalSocketExtensions.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
-        using var server = CriticalSocketExtensions.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
-        var packetFactory = new PacketFactory();
+        using var client = SocketFactory.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        using var server = SocketFactory.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
+        var packetFactory = new PacketManager();
         server.Listen(new IPEndPoint(IPAddress.Any, 6666));
         client.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6666));
         while (server.ConnectionManager.ConnectedClients.Count != 1 || !client.ConnectionManager.Connected)
@@ -169,9 +169,9 @@ public class IntegrationTests
     public void Can_Send_And_Receive_Long_Reliable_Messages()
     {
         // Arrange
-        using var client = CriticalSocketExtensions.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
-        using var server = CriticalSocketExtensions.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
-        var packetFactory = new PacketFactory();
+        using var client = SocketFactory.CreateClient(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        using var server = SocketFactory.CreateServer(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), 1);
+        var packetFactory = new PacketManager();
         server.Listen(new IPEndPoint(IPAddress.Any, 5555));
         client.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5555));
         while (server.ConnectionManager.ConnectedClients.Count != 1 || !client.ConnectionManager.Connected)

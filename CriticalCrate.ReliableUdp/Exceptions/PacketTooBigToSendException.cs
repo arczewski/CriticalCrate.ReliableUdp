@@ -1,3 +1,2 @@
 ﻿namespace CriticalCrate.ReliableUdp.Exceptions;
-
-public class PacketTooBigToSendException(string message) : Exception(message);
+public class PacketTooBigToSendException() : Exception("Packet too big to send");

@@ -8,22 +8,20 @@ public sealed class Server(
     IUnreliableChannel unreliableChannel,
     IReliableChannel reliableChannel,
     IPingChannel pingChannel,
-    IServerConnectionManager serverConnectionManager)
-    : CriticalSocket(socket, unreliableChannel, reliableChannel, pingChannel, serverConnectionManager)
+    IServerConnectionManager serverConnectionManager,
+    IPacketFactory packetFactory)
+    : CriticalSocket(socket, unreliableChannel, reliableChannel, pingChannel, serverConnectionManager, packetFactory)
 {
     public event Action<EndPoint>? OnConnected;
     public event Action<EndPoint>? OnDisconnected;
     public IServerConnectionManager ConnectionManager { get; } = serverConnectionManager;
-    public IPEndPoint ServerEndpoint { get; private set; }
 
     public void Listen(IPEndPoint endPoint)
     {
-        ServerEndpoint = endPoint;
         socket.Listen(endPoint);
         ConnectionManager.OnConnected += HandleConnected;
         ConnectionManager.OnDisconnected += HandleDisconnected;
     }
-
 
     private void HandleDisconnected(EndPoint endPoint)
     {
@@ -37,10 +35,5 @@ public sealed class Server(
         reliableChannel.HandleConnection(endPoint);
         pingChannel.HandleConnection(endPoint);
         OnConnected?.Invoke(endPoint);
-    }
-
-    protected override SocketAddress TranslateEndpoint(Packet packet)
-    {
-        return ConnectionManager.GetSocketAddress(packet.EndPoint);
     }
 }

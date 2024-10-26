@@ -5,7 +5,7 @@ namespace CriticalCrate.ReliableUdp;
 internal class RingBuffer<T>(int capacity) : IEnumerable<T>
 {
    private readonly Queue<T> _queue = [];
-   public long Capacity { get; init; } = capacity; 
+   public long Capacity { get; } = capacity; 
 
    public void Add(T item)
    {

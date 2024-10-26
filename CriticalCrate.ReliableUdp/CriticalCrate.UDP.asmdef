@@ -1,11 +1,11 @@
 {
-    "name": "CriticalCrate.UDP",
-    "rootNamespace": "",
+    "name": "CriticalCrate.ReliableUdp",
+    "rootNamespace": "CriticalCrate.ReliableUdp",
     "references": [
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
-    "allowUnsafeCode": true,
+    "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,

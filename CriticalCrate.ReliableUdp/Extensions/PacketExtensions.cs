@@ -5,44 +5,43 @@ namespace CriticalCrate.ReliableUdp.Extensions;
 
 internal static class PacketExtensions
 {
-    public static Packet CreateUnreliable(this IPacketFactory packetFactory, in Packet packet, ushort packetId, byte version = 1)
+    public static Packet CreateUnreliable(this IPacketFactory packetFactory, in Packet packet, ushort packetId)
     {
         var newPacket = packetFactory.CreatePacket(packet.EndPoint, packet.Position - packet.Offset + UnreliableChannel.HeaderSize);
-        newPacket.SetSocketAddress(packet.SocketAddress);
         var buffer = newPacket.Buffer;
-        buffer[0] = (byte) PacketType.Unreliable;
-        buffer[1] = version;
-        BitConverter.TryWriteBytes(buffer[2..], packetId);
-        packet.Buffer.CopyTo(buffer[4..]);
+        buffer[Constants.FlagPosition] = (byte) PacketType.Unreliable;
+        buffer[Constants.VersionPosition] = Constants.Version;
+        BitConverter.TryWriteBytes(buffer[Constants.PacketIdPosition..], packetId);
+        packet.Buffer.CopyTo(buffer[Constants.UnreliablePacketDataPosition..]);
         return newPacket;
     }
     
-    public static Packet CreatePing(this IPacketFactory packetFactory, EndPoint endPoint, ushort packetId, byte version = 1)
+    public static Packet CreatePing(this IPacketFactory packetFactory, EndPoint endPoint, ushort packetId)
     {
         var newPacket = packetFactory.CreatePacket(endPoint, PingChannel.HeaderSize);
         var buffer = newPacket.Buffer;
-        buffer[0] = (byte)PacketType.Ping;
-        buffer[1] = version;
-        BitConverter.TryWriteBytes(buffer[2..], packetId);
+        buffer[Constants.FlagPosition] = (byte)PacketType.Ping;
+        buffer[Constants.VersionPosition] = Constants.Version;
+        BitConverter.TryWriteBytes(buffer[Constants.PacketIdPosition..], packetId);
         return newPacket;
     }
 
-    public static Packet CreatePong(this IPacketFactory packetFactory, EndPoint endPoint, ushort packetId, byte version = 1)
+    public static Packet CreatePong(this IPacketFactory packetFactory, EndPoint endPoint, ushort packetId)
     {
         var newPacket = packetFactory.CreatePacket(endPoint, PingChannel.HeaderSize);
         var buffer = newPacket.Buffer;
-        buffer[0] = (byte)(PacketType.PingAck);
-        buffer[1] = version;
-        BitConverter.TryWriteBytes(buffer[2..], packetId);
+        buffer[Constants.FlagPosition] = (byte)PacketType.PingAck;
+        buffer[Constants.VersionPosition] = Constants.Version;
+        BitConverter.TryWriteBytes(buffer[Constants.PacketIdPosition..], packetId);
         return newPacket;
     }
 
     public static Packet CreateReliableAck(this IPacketFactory packetFactory, Packet packet, ushort ack)
     {
-        var newPacket = packetFactory.CreatePacket(packet.EndPoint, ReliableChannel.HeaderSize);
-        packet.Buffer[..ReliableChannel.HeaderSize].CopyTo(newPacket.Buffer);
-        newPacket.Buffer[0] = (byte)(PacketType.Reliable | PacketType.Ack);
-        BitConverter.TryWriteBytes(newPacket.Buffer[ReliableChannel.AckPosition..], ack);
+        var newPacket = packetFactory.CreatePacket(packet.EndPoint, Constants.HeaderSize);
+        packet.Buffer[..Constants.HeaderSize].CopyTo(newPacket.Buffer);
+        newPacket.Buffer[Constants.FlagPosition] = (byte)(PacketType.Reliable | PacketType.Ack);
+        BitConverter.TryWriteBytes(newPacket.Buffer[Constants.AckPosition..], ack);
         return newPacket;
     }
 }

@@ -7,7 +7,7 @@ public interface ISocket : IDisposable
     const int Mtu = 508;
     event OnPacketReceived OnPacketReceived;
     void Listen(EndPoint endPoint);
-    void Send(Packet packet);
+    void Send(in Packet packet);
     bool Pool();
 }
 

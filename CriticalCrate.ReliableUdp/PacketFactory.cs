@@ -5,13 +5,21 @@ namespace CriticalCrate.ReliableUdp;
 
 public interface IPacketFactory
 {
-    void ReturnPacket(Packet packet);
     Packet CreatePacket(EndPoint endPoint, byte[] buffer, int offset, int size);
     Packet CreatePacket(EndPoint endPoint, int size);
+}
+
+internal interface IPacketDisposal
+{
+    void ReturnPacket(Packet packet);
+}
+
+internal interface IPacketManager : IPacketFactory, IPacketDisposal
+{
     Packet CreatePacket(in Packet endPoint);
 }
 
-public class PacketFactory : IPacketFactory
+internal class PacketManager : IPacketManager
 {
     public void ReturnPacket(Packet packet)
     {

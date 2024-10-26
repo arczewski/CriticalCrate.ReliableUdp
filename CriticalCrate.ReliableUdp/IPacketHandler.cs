@@ -1,6 +1,4 @@
-﻿using System.Net;
-
-namespace CriticalCrate.ReliableUdp;
+﻿namespace CriticalCrate.ReliableUdp;
 
 public interface IPacketHandler
 {

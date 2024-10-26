@@ -1,2 +1,2 @@
 ﻿namespace CriticalCrate.ReliableUdp.Exceptions;
-public class UnrecognizedEndpointException(string message) : Exception(message);
+public class UnrecognizedEndpointException : Exception;

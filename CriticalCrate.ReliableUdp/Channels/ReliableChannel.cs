@@ -6,37 +6,27 @@ using CriticalCrate.ReliableUdp.Extensions;
 
 namespace CriticalCrate.ReliableUdp.Channels;
 
-public interface IReliableChannel : IChannel, IPacketHandler, IConnectionHandler
+public interface IReliableChannel : IChannel, IPacketHandler, IConnectionHandler, IDisposable
 {
     void PushOutgoingPackets(DateTime now);
-    
     event Action<Packet> OnPacketReceived;
     void OnPingUpdated(EndPoint endpoint, long ping);
 }
 
-internal class ReliableChannel(ISocket socket, IPacketFactory packetFactory) : IReliableChannel
+internal class ReliableChannel(ISocket socket, IPacketManager packetManager) : IReliableChannel
 {
-    public const int HeaderSize = FlagSize + VersionSize + PacketIdSize + PacketsCountSize + SeqAckSize;
-    public const int AckPosition = HeaderSize - SeqAckSize;
-    public const int PacketsCountPosition = HeaderSize - SeqAckSize - PacketsCountSize;
     public event Action<Packet>? OnPacketReceived;
-
-    private const int FlagSize = sizeof(byte);
-    private const int VersionSize = sizeof(byte);
-    private const int PacketIdSize = sizeof(ushort);
-    private const int PacketsCountSize = sizeof(ushort);
-    private const int SeqAckSize = sizeof(ushort);
-
     private readonly Dictionary<EndPoint, OutgoingPacketHandler> _outgoingPacketHandlers = new();
     private readonly Dictionary<EndPoint, IncomingPacketHandler> _incomingPacketHandlers = new();
 
     public void Send(in Packet packet)
     {
         if (!_outgoingPacketHandlers.TryGetValue(packet.EndPoint, out var handler))
-            throw new UnrecognizedEndpointException(packet.EndPoint.ToString() ?? string.Empty);
+            throw new UnrecognizedEndpointException();
         handler.Enqueue(packet);
         SendOutgoingPackets(handler, handler.GetPacketsToSend(DateTime.Now));
     }
+
     public void OnPingUpdated(EndPoint endpoint, long ping)
     {
         if (!_outgoingPacketHandlers.TryGetValue(endpoint, out var handler))
@@ -47,8 +37,8 @@ internal class ReliableChannel(ISocket socket, IPacketFactory packetFactory) : I
     private void SendOutgoingPackets(OutgoingPacketHandler handler, ReadOnlySpan<Packet> packets)
     {
         if (packets.Length == 0) return;
-        foreach(var packet in packets)
-            socket.Send(packetFactory.CreatePacket(packet));
+        foreach (var packet in packets)
+            socket.Send(packetManager.CreatePacket(packet));
         handler.MarkAsSent(DateTime.Now);
     }
 
@@ -80,7 +70,7 @@ internal class ReliableChannel(ISocket socket, IPacketFactory packetFactory) : I
         if (isOldPacket)
         {
             var oldAck = ReadAck(receivedPacket);
-            var ackPacket = packetFactory.CreateReliableAck(receivedPacket, oldAck);
+            var ackPacket = packetManager.CreateReliableAck(receivedPacket, oldAck);
             socket.Send(ackPacket);
             return;
         }
@@ -89,7 +79,7 @@ internal class ReliableChannel(ISocket socket, IPacketFactory packetFactory) : I
         if (incomingPacketBuilder.ReceiveSlice(packetId, seq, receivedPacket))
         {
             var ackPacket =
-                packetFactory.CreateReliableAck(receivedPacket, incomingPacketBuilder.LastAcknowledgedSlice);
+                packetManager.CreateReliableAck(receivedPacket, incomingPacketBuilder.LastAcknowledgedSlice);
             socket.Send(ackPacket);
         }
 
@@ -107,7 +97,7 @@ internal class ReliableChannel(ISocket socket, IPacketFactory packetFactory) : I
 
     private ushort ReadAck(in Packet receivedPacket)
     {
-        return BitConverter.ToUInt16(receivedPacket.Buffer[AckPosition..]);
+        return BitConverter.ToUInt16(receivedPacket.Buffer[Constants.AckPosition..]);
     }
 
     public void Dispose()
@@ -120,8 +110,8 @@ internal class ReliableChannel(ISocket socket, IPacketFactory packetFactory) : I
 
     public void HandleConnection(EndPoint endPoint)
     {
-        _outgoingPacketHandlers.Add(endPoint, new OutgoingPacketHandler(packetFactory));
-        _incomingPacketHandlers.Add(endPoint, new IncomingPacketHandler(packetFactory));
+        _outgoingPacketHandlers.Add(endPoint, new OutgoingPacketHandler(packetManager));
+        _incomingPacketHandlers.Add(endPoint, new IncomingPacketHandler(packetManager));
     }
 
     public void HandleDisconnection(EndPoint endPoint)
@@ -134,9 +124,10 @@ internal class ReliableChannel(ISocket socket, IPacketFactory packetFactory) : I
     }
 }
 
-internal sealed class IncomingPacketHandler(IPacketFactory packetFactory) : IDisposable
+internal sealed class IncomingPacketHandler(IPacketManager packetManager) : IDisposable
 {
     private const int MaxPacketsCount = ushort.MaxValue - 1;
+    private const int DataBufferSize = ISocket.Mtu - Constants.HeaderSize;
     public ushort SliceCount { get; private set; }
     public ushort LastAcknowledgedSlice { get; private set; }
     public ushort PacketId { get; private set; } = 1;
@@ -151,7 +142,7 @@ internal sealed class IncomingPacketHandler(IPacketFactory packetFactory) : IDis
         SliceCount = 0;
         LastAcknowledgedSlice = 0;
         _byteSize = 0;
-        packetFactory.ReturnPacket(_reconstructedPacket);
+        packetManager.ReturnPacket(_reconstructedPacket);
         _ackBuffer.SetAll(false);
     }
 
@@ -160,10 +151,10 @@ internal sealed class IncomingPacketHandler(IPacketFactory packetFactory) : IDis
         var buffer = packet.Buffer;
         if (SliceCount == 0)
         {
-            var slices = BitConverter.ToUInt16(buffer[ReliableChannel.PacketsCountPosition..]);
+            var slices = BitConverter.ToUInt16(buffer[Constants.PacketsCountPosition..]);
             SliceCount = slices;
-            _reconstructedPacket = packetFactory.CreatePacket(packet.EndPoint,
-                SliceCount * (ISocket.Mtu - ReliableChannel.HeaderSize));
+            _reconstructedPacket = packetManager.CreatePacket(packet.EndPoint,
+                SliceCount * DataBufferSize);
         }
 
         if (packetId != PacketId)
@@ -171,19 +162,17 @@ internal sealed class IncomingPacketHandler(IPacketFactory packetFactory) : IDis
 
         if (seq < LastAcknowledgedSlice)
             return false;
-
-        _ackBuffer[seq - 1] = true;
-        packet.Buffer[ReliableChannel.HeaderSize..]
-            .CopyTo(
-                _reconstructedPacket.Buffer[
-                    ((seq - 1) * (ISocket.Mtu - ReliableChannel.HeaderSize))..]); // TODO cache calculation
+        var seqAsIndex = seq - 1;
+        _ackBuffer[seqAsIndex] = true;
+        packet.Buffer[Constants.HeaderSize..]
+            .CopyTo(_reconstructedPacket.Buffer[(seqAsIndex * DataBufferSize)..]);
 
         if (seq == SliceCount)
-            _byteSize = ((SliceCount - 1) * (ISocket.Mtu - ReliableChannel.HeaderSize)) + (packet.Position - ReliableChannel.HeaderSize);
-        
+            _byteSize = (SliceCount - 1) * DataBufferSize + (packet.Position - Constants.HeaderSize);
+
         if (LastAcknowledgedSlice + 1 != seq) return false;
         LastAcknowledgedSlice = seq;
-        for (ushort i = (ushort)(seq + 1); i < SliceCount; i++)
+        for (var i = (ushort)(seq + 1); i < SliceCount; i++)
         {
             if (!_ackBuffer[i - 1])
                 break;
@@ -196,7 +185,7 @@ internal sealed class IncomingPacketHandler(IPacketFactory packetFactory) : IDis
     public void Dispose()
     {
         if (SliceCount != 0)
-            packetFactory.ReturnPacket(_reconstructedPacket);
+            packetManager.ReturnPacket(_reconstructedPacket);
     }
 
     public bool IsComplete()
@@ -211,38 +200,34 @@ internal sealed class IncomingPacketHandler(IPacketFactory packetFactory) : IDis
     }
 }
 
-internal sealed class OutgoingPacketHandler(IPacketFactory packetFactory) : IDisposable
+internal sealed class OutgoingPacketHandler(IPacketManager packetManager) : IDisposable
 {
-    private const int MaxPacketSize = ISocket.Mtu - ReliableChannel.HeaderSize;
-    private readonly TimeSpan _initialWaitTimeForAck = TimeSpan.FromMilliseconds(100);
+    private const int MaxPacketSize = ISocket.Mtu - Constants.HeaderSize;
     public ushort ReliablePacketId { get; private set; }
-    public bool IsCompleted => _outgoingSlices.Count == _acknowledgedSlices;
+    private bool IsCompleted => _outgoingSlices.Count == _acknowledgedSlices;
     public bool HasPackets => _outgoingSlices.Count > 0;
+    private TimeSpan _initialWaitTimeForAck = TimeSpan.FromMilliseconds(10);
     private const int MaxPacketsCount = ushort.MaxValue - 1;
     private readonly List<Packet> _outgoingSlices = new(MaxPacketsCount);
     private readonly Queue<Packet> _pendingOutgoingPackets = new();
     private ushort _acknowledgedSlices;
     private DateTime _lastSendTime = DateTime.MinValue;
     private TimeSpan _waitTimeForAck;
-    
+
     public void SliceDelivered(ushort sliceSequenceNumber)
     {
-        if(_acknowledgedSlices < sliceSequenceNumber)
+        if (_acknowledgedSlices < sliceSequenceNumber)
             _acknowledgedSlices = sliceSequenceNumber;
-        if (IsCompleted && _outgoingSlices.Count > 0)
-        {
-            foreach (var packet in _outgoingSlices)
-                packetFactory.ReturnPacket(packet);
-            _outgoingSlices.Clear();
-            if(_pendingOutgoingPackets.TryDequeue(out var outgoingPacket))
-                Next(outgoingPacket);
-        }
+        if (!IsCompleted || _outgoingSlices.Count <= 0) return;
+        foreach (var packet in _outgoingSlices)
+            packetManager.ReturnPacket(packet);
+        _outgoingSlices.Clear();
+        if (_pendingOutgoingPackets.TryDequeue(out var outgoingPacket))
+            Next(outgoingPacket);
     }
 
-    public void OnPingUpdated(long ping)
-    {
-        _waitTimeForAck = TimeSpan.FromMilliseconds(ping + 1);
-    }
+    public void OnPingUpdated(long ping) => _initialWaitTimeForAck = TimeSpan.FromMilliseconds(ping + 1);
+    
 
     private void Next(in Packet packet)
     {
@@ -251,48 +236,50 @@ internal sealed class OutgoingPacketHandler(IPacketFactory packetFactory) : IDis
         _outgoingSlices.Clear();
         _acknowledgedSlices = 0;
         ReliablePacketId += 1;
-        int size = packet.Buffer.Length;
+        var size = packet.Buffer.Length;
         var divide = size / MaxPacketSize;
         var modulo = size % MaxPacketSize;
         var requiredPacketsCount = divide + (modulo > 0 ? 1 : 0);
         if (requiredPacketsCount >= MaxPacketsCount)
-            throw new PacketTooBigToSendException("Packet is too big to send");
-        FillPacketSlicesIntoList(_outgoingSlices, (ushort)requiredPacketsCount, modulo == 0 ? MaxPacketSize : modulo, in packet);
-        packetFactory.ReturnPacket(packet);
+            throw new PacketTooBigToSendException();
+        FillPacketSlicesIntoList(_outgoingSlices, (ushort)requiredPacketsCount, modulo == 0 ? MaxPacketSize : modulo,
+            in packet);
+        packetManager.ReturnPacket(packet);
     }
 
-    private void FillPacketSlicesIntoList(List<Packet> packets, ushort requiredPacketsCount, int lastSliceSize, in Packet packetToSlice)
+    private void FillPacketSlicesIntoList(List<Packet> packets, ushort requiredPacketsCount, int lastSliceSize,
+        in Packet packetToSlice)
     {
         packets.Clear();
         var buffer = packetToSlice.Buffer;
         for (var i = 0; i < requiredPacketsCount; i++)
         {
-            int packetSize = i == requiredPacketsCount - 1 ? lastSliceSize + ReliableChannel.HeaderSize : ISocket.Mtu;
-            var packetSlice = packetFactory.CreatePacket(packetToSlice.EndPoint, packetSize);
-            packetSlice.SetSocketAddress(packetToSlice.SocketAddress);
-            
+            var packetSize = i == requiredPacketsCount - 1 ? lastSliceSize + Constants.HeaderSize : ISocket.Mtu;
+            var packetSlice = packetManager.CreatePacket(packetToSlice.EndPoint, packetSize);
+
             var packetSliceBuffer = packetSlice.Buffer;
-            packetSliceBuffer[0] = (byte)PacketType.Reliable;
-            packetSliceBuffer[1] = 1; // version
-            BitConverter.TryWriteBytes(packetSliceBuffer[2..], ReliablePacketId);
-            BitConverter.TryWriteBytes(packetSliceBuffer[4..], requiredPacketsCount); // TODO use reliable channel const
-            BitConverter.TryWriteBytes(packetSliceBuffer[6..], (ushort)(i + 1));
-            buffer.Slice(i * MaxPacketSize, i == requiredPacketsCount - 1 ? lastSliceSize : MaxPacketSize).CopyTo(packetSliceBuffer[ReliableChannel.HeaderSize..]);
+            packetSliceBuffer[Constants.FlagPosition] = (byte)PacketType.Reliable;
+            packetSliceBuffer[Constants.VersionPosition] = Constants.Version;
+            BitConverter.TryWriteBytes(packetSliceBuffer[Constants.PacketIdPosition..], ReliablePacketId);
+            BitConverter.TryWriteBytes(packetSliceBuffer[Constants.PacketsCountPosition..], requiredPacketsCount);
+            BitConverter.TryWriteBytes(packetSliceBuffer[Constants.AckPosition..], (ushort)(i + 1));
+            buffer.Slice(i * MaxPacketSize, i == requiredPacketsCount - 1 ? lastSliceSize : MaxPacketSize)
+                .CopyTo(packetSliceBuffer[Constants.HeaderSize..]);
             packets.Add(packetSlice);
         }
     }
 
     public void Dispose()
     {
-        foreach(var packet in _pendingOutgoingPackets) 
-            packetFactory.ReturnPacket(packet);
+        foreach (var packet in _pendingOutgoingPackets)
+            packetManager.ReturnPacket(packet);
         _pendingOutgoingPackets.Clear();
     }
 
     public void Enqueue(in Packet packet)
     {
         _pendingOutgoingPackets.Enqueue(packet);
-        if(!HasPackets)
+        if (!HasPackets)
             Next(_pendingOutgoingPackets.Dequeue());
     }
 
@@ -302,7 +289,6 @@ internal sealed class OutgoingPacketHandler(IPacketFactory packetFactory) : IDis
         {
             return CollectionsMarshal.AsSpan(_outgoingSlices)[_acknowledgedSlices..];
         }
-
         return Span<Packet>.Empty;
     }
 

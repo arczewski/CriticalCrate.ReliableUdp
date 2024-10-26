@@ -1,5 +1,4 @@
-﻿using System.Net;
-using CriticalCrate.ReliableUdp.Channels;
+﻿using CriticalCrate.ReliableUdp.Channels;
 using CriticalCrate.ReliableUdp.Exceptions;
 
 namespace CriticalCrate.ReliableUdp;
@@ -7,12 +6,13 @@ namespace CriticalCrate.ReliableUdp;
 public enum SendMode
 {
     Unreliable = 0,
-    Reliable = 1,
+    Reliable = 1
 }
 
 public abstract class CriticalSocket : IDisposable
 {
     public event Action<Packet>? OnPacketReceived;
+    public IPacketFactory PacketFactory { get; }
 
     private readonly ISocket _socket;
     private readonly IUnreliableChannel _unreliableChannel;
@@ -21,7 +21,7 @@ public abstract class CriticalSocket : IDisposable
     private readonly IConnectionManager _connectionManager;
 
     protected CriticalSocket(ISocket socket, IUnreliableChannel unreliableChannel, IReliableChannel reliableChannel,
-        IPingChannel pingChannel, IConnectionManager connectionManager)
+        IPingChannel pingChannel, IConnectionManager connectionManager, IPacketFactory packetFactory)
     {
         _socket = socket;
         _pingChannel = pingChannel;
@@ -31,13 +31,13 @@ public abstract class CriticalSocket : IDisposable
         _socket.OnPacketReceived += ReceivePacket;
         _reliableChannel.OnPacketReceived += packet => { OnPacketReceived?.Invoke(packet); };
         _pingChannel.OnPingUpdated += reliableChannel.OnPingUpdated;
+        PacketFactory = packetFactory;
     }
 
     private void ReceivePacket(Packet packet)
     {
-        var packetType = (PacketType)packet.Buffer[0];
-        var packetVersion = packet.Buffer[1];
-        var packetId = BitConverter.ToUInt16(packet.Buffer[2..]);
+        var packetType = (PacketType)packet.Buffer[Constants.FlagPosition];
+        var packetId = BitConverter.ToUInt16(packet.Buffer[Constants.PacketIdPosition..]);
         _connectionManager.HandlePacket(in packet, in packetType, in packetId);
         switch (packetType)
         {
@@ -83,23 +83,18 @@ public abstract class CriticalSocket : IDisposable
         }
 
         var now = DateTime.UtcNow;
-        //_pingChannel.SendPendingPings(now);
+        _pingChannel.SendPendingPings(now);
         _connectionManager.CheckConnectionTimeout(now);
         _reliableChannel.PushOutgoingPackets(now);
     }
 
-    protected abstract SocketAddress TranslateEndpoint(Packet packet);
-
-    public void Send(Packet packet, SendMode sendMode)
+    public void Send(in Packet packet, SendMode sendMode)
     {
-        packet = packet with { SocketAddress = TranslateEndpoint(packet) };
         switch (sendMode)
         {
             case SendMode.Unreliable:
                 if (packet.Buffer.Length >= ISocket.Mtu - UnreliableChannel.HeaderSize)
-                    throw new PacketTooBigToSendException(
-                        $"Packet too large. Maximum unreliable size {ISocket.Mtu - UnreliableChannel.HeaderSize}.");
-
+                    throw new PacketTooBigToSendException();
                 _unreliableChannel.Send(in packet);
                 break;
             case SendMode.Reliable:
@@ -112,6 +107,7 @@ public abstract class CriticalSocket : IDisposable
 
     public void Dispose()
     {
+        _reliableChannel.Dispose();
         _socket.Dispose();
     }
 }
