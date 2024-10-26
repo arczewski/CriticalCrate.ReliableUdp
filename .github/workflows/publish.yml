@@ -3,9 +3,6 @@ name: Publish NuGet Package
 on:
   release:
     types: [created]
-    
-permissions:
-  contents: write
   
 jobs:
   publish:
@@ -44,6 +41,14 @@ jobs:
           cd package
           tar -czf ../CriticalCrate.ReliableUdp.tgz *
           cd ..
+          
+      - name: Upload Release Artifact
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./CriticalCrate.ReliableUdp.tgz
+          asset_name: CriticalCrate.ReliableUdp.tgz
+          asset_content_type: application/gzip
           
       - name: Publish to NuGet
         env:
