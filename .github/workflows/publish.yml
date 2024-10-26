@@ -2,10 +2,6 @@ name: Publish NuGet Package
 on:
   release:
     types: [created]
-permissions:
-  contents: read|write
-  deployments: read|write
-  packages: read|write
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -46,6 +42,8 @@ jobs:
           
       - name: Upload Release Artifact
         uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: ./CriticalCrate.ReliableUdp.tgz
