@@ -7,7 +7,7 @@
         <AssemblyName>CriticalCrate.ReliableUdp</AssemblyName>
         <RootNamespace>CriticalCrate.ReliableUdp</RootNamespace>
         
-        <PackageId>ReliableUdp</PackageId>
+        <PackageId>CriticalCrate.ReliableUdp</PackageId>
         <Version>0.9.0</Version>
         <Authors>Artur Czapiewski</Authors>
         <Company>CriticalCrate</Company>
