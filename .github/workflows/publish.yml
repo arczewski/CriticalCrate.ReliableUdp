@@ -16,16 +16,19 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '8.x'  # Replace with your project's .NET version
+          dotnet-version: '8.x'  # Replace with your .NET version
 
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build project
+      - name: Build solution
         run: dotnet build --configuration Release --no-restore
 
+      - name: Run tests
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
       - name: Pack NuGet Package
-        run: dotnet pack --configuration Release --no-build -o ./artifacts
+        run: dotnet pack CriticalCrate.ReliableUdp/CriticalCrate.ReliableUdp.csproj --configuration Release --no-build -o ./artifacts
 
       - name: Publish to NuGet
         env:
