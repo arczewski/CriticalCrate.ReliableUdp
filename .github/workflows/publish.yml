@@ -1,9 +1,11 @@
 name: Publish NuGet Package
-
 on:
   release:
     types: [created]
-  
+permissions:
+  contents: read|write
+  deployments: read|write
+  packages: read|write
 jobs:
   publish:
     runs-on: ubuntu-latest
