@@ -1,10 +1,9 @@
 name: Publish NuGet Package
 
 on:
-  push:
-    tags:
-      - 'v*'  # Triggers on version tags like v1.0
-
+  release:
+    types: [created]
+    
 permissions:
   contents: write
   
