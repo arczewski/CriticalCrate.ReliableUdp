@@ -8,7 +8,7 @@
         <RootNamespace>CriticalCrate.ReliableUdp</RootNamespace>
         
         <PackageId>ReliableUdp</PackageId>
-        <Version>0.9.0</Version>
+        <Version>0.9.0-prerelease</Version>
         <Authors>Artur Czapiewski</Authors>
         <Company>CriticalCrate</Company>
         <PackageDescription>ReliableUdp library</PackageDescription>
