@@ -24,10 +24,9 @@ jobs:
         run: dotnet pack CriticalCrate.ReliableUdp/CriticalCrate.ReliableUdp.csproj --configuration Release --no-build -o ./artifacts
       - name: Create Package Structure
         run: |
-          mkdir -p package/{Runtime,Editor,Tests}
-          cp -r ./CriticalCrate.ReliableUdp/bin/Release/net8.0/*.dll package/Runtime/
-          cp CriticalCrate.ReliableUdp/package.json package/package.json
-          cp CriticalCrate.ReliableUdp/CriticalCrate.ReliableUdp.Runtime.asmdef package/Runtime/
+          mkdir package
+          cp -r UnityPackage/* package/
+          cp CriticalCrate.ReliableUdp/bin/Release/net8.0/CriticalCrate.ReliableUdp.dll package/Runtime/
       - name: Create Tarball
         run: |
           tar -czvf CriticalCrate.ReliableUdp.tgz package
